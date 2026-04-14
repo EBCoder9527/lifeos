@@ -6,6 +6,7 @@ import HabitPage from './pages/habit/HabitPage'
 import HabitManagePage from './pages/habit/HabitManagePage'
 import IdeaPage from './pages/idea/IdeaPage'
 import TaskPage from './pages/task/TaskPage'
+import SettingsPage from './pages/settings/SettingsPage'
 
 export default function App() {
   return (
@@ -19,6 +20,7 @@ export default function App() {
           <Route path="/habit/manage" element={<HabitManagePage />} />
           <Route path="/idea" element={<IdeaPage />} />
           <Route path="/task" element={<TaskPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
           <Route path="*" element={<Navigate to="/diary" replace />} />
         </Route>
       </Routes>

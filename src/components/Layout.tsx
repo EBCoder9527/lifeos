@@ -21,13 +21,22 @@ export function Layout() {
           >
             DayFlow
           </h1>
-          <button
-            onClick={toggleTheme}
-            className="text-xl p-1"
-            aria-label="切换主题"
-          >
-            {theme === 'light' ? '🌙' : '☀️'}
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={toggleTheme}
+              className="text-xl p-1"
+              aria-label="切换主题"
+            >
+              {theme === 'light' ? '🌙' : '☀️'}
+            </button>
+            <button
+              onClick={() => navigate('/settings')}
+              className="text-xl p-1"
+              aria-label="设置"
+            >
+              ⚙️
+            </button>
+          </div>
         </div>
       </header>
 
