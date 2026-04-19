@@ -17,17 +17,6 @@
   <body>
     <div id="root"><p id="_boot" style="text-align:center;padding:80px 20px;font-family:system-ui;color:#888">Loading...</p></div>
     <script>
-      // SPA redirect handler for GitHub Pages 404 hack
-      (function(l) {
-        if (l.search[1] === '/') {
-          var decoded = l.search.slice(1).split('&').map(function(s) {
-            return s.replace(/~and~/g, '&')
-          }).join('?');
-          window.history.replaceState(null, null, l.pathname.slice(0, -1) + decoded + l.hash);
-        }
-      }(window.location));
-    </script>
-    <script>
       window.onerror=function(m,s,l,c,e){
         document.getElementById('_boot').innerHTML='<b style="color:red">Error</b><br><pre style="text-align:left;font-size:12px;white-space:pre-wrap;word-break:break-all">'+m+'\n'+s+':'+l+':'+c+(e&&e.stack?'\n'+e.stack:'')+'</pre>';
       };
