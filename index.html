@@ -13,7 +13,15 @@
     <title>LifeOS</title>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root"><p id="_boot" style="text-align:center;padding:80px 20px;font-family:system-ui;color:#888">Loading...</p></div>
+    <script>
+      window.onerror=function(m,s,l,c,e){
+        document.getElementById('_boot').innerHTML='<b style="color:red">Error</b><br><pre style="text-align:left;font-size:12px;white-space:pre-wrap;word-break:break-all">'+m+'\n'+s+':'+l+':'+c+(e&&e.stack?'\n'+e.stack:'')+'</pre>';
+      };
+      window.addEventListener('unhandledrejection',function(ev){
+        document.getElementById('_boot').innerHTML='<b style="color:red">Error</b><br><pre style="text-align:left;font-size:12px;white-space:pre-wrap;word-break:break-all">'+ev.reason+'</pre>';
+      });
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
