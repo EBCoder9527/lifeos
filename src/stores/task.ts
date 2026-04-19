@@ -1,23 +1,32 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { nanoid } from 'nanoid'
-import type { Task } from '../types'
+import type { Task, Priority } from '../types'
 
 interface TaskStore {
   tasks: Task[]
-  addTask: (title: string) => void
+  addTask: (title: string, priority?: Priority, category?: string, dueDate?: string) => void
   toggleTask: (id: string) => void
   deleteTask: (id: string) => void
+  updateTask: (id: string, data: Partial<Pick<Task, 'title' | 'priority' | 'category' | 'dueDate'>>) => void
 }
 
 export const useTaskStore = create<TaskStore>()(
   persist(
     (set) => ({
       tasks: [],
-      addTask: (title) =>
+      addTask: (title, priority = 'medium', category, dueDate) =>
         set((state) => ({
           tasks: [
-            { id: nanoid(), title, done: false, createdAt: Date.now() },
+            {
+              id: nanoid(),
+              title,
+              done: false,
+              priority,
+              category,
+              dueDate,
+              createdAt: Date.now(),
+            },
             ...state.tasks,
           ],
         })),
@@ -32,6 +41,12 @@ export const useTaskStore = create<TaskStore>()(
       deleteTask: (id) =>
         set((state) => ({
           tasks: state.tasks.filter((t) => t.id !== id),
+        })),
+      updateTask: (id, data) =>
+        set((state) => ({
+          tasks: state.tasks.map((t) =>
+            t.id === id ? { ...t, ...data } : t
+          ),
         })),
     }),
     { name: 'dayflow_tasks' }

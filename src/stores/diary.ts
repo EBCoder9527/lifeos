@@ -5,8 +5,8 @@ import type { Diary } from '../types'
 
 interface DiaryStore {
   diaries: Diary[]
-  addDiary: (data: Pick<Diary, 'date' | 'content' | 'mood'>) => void
-  updateDiary: (id: string, data: Partial<Pick<Diary, 'content' | 'mood'>>) => void
+  addDiary: (data: Pick<Diary, 'date' | 'content' | 'mood' | 'tags'>) => void
+  updateDiary: (id: string, data: Partial<Pick<Diary, 'content' | 'mood' | 'tags'>>) => void
   deleteDiary: (id: string) => void
 }
 
@@ -37,6 +37,19 @@ export const useDiaryStore = create<DiaryStore>()(
           diaries: state.diaries.filter((d) => d.id !== id),
         })),
     }),
-    { name: 'dayflow_diaries' }
+    {
+      name: 'dayflow_diaries',
+      version: 1,
+      migrate: (persistedState: unknown, version: number) => {
+        const state = persistedState as DiaryStore
+        if (version === 0) {
+          state.diaries = state.diaries.map((d) => ({
+            ...d,
+            tags: (d as Diary).tags ?? [],
+          }))
+        }
+        return state
+      },
+    }
   )
 )

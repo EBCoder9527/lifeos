@@ -1,51 +1,41 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router'
-import { useDiaryStore } from '../../stores/diary'
+import { useIdeaStore } from '../../stores/idea'
 import dayjs from 'dayjs'
-import type { Diary } from '../../types'
+import type { IdeaCategory } from '../../types'
 
-const moods: { value: Diary['mood']; emoji: string; label: string; color: string }[] = [
-  { value: 'happy', emoji: '😊', label: '开心', color: 'bg-warning-soft border-warning' },
-  { value: 'calm', emoji: '😌', label: '平静', color: 'bg-accent-soft border-accent' },
-  { value: 'sad', emoji: '😢', label: '难过', color: 'bg-primary-soft border-primary' },
-  { value: 'angry', emoji: '😤', label: '烦躁', color: 'bg-secondary-soft border-secondary' },
-  { value: 'tired', emoji: '😴', label: '疲惫', color: 'bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-600' },
+const categories: { value: IdeaCategory; emoji: string; label: string; color: string }[] = [
+  { value: 'idea', emoji: '💡', label: '灵感', color: 'bg-warning-soft text-warning' },
+  { value: 'note', emoji: '📝', label: '记录', color: 'bg-accent-soft text-accent' },
+  { value: 'important', emoji: '⭐', label: '重要', color: 'bg-secondary-soft text-secondary' },
 ]
 
-const moodEmoji: Record<string, string> = {
-  happy: '😊', calm: '😌', sad: '😢', angry: '😤', tired: '😴',
+const categoryEmoji: Record<IdeaCategory, string> = { idea: '💡', note: '📝', important: '⭐' }
+const categoryLabel: Record<IdeaCategory, string> = { idea: '灵感', note: '记录', important: '重要' }
+const categoryChipColor: Record<IdeaCategory, string> = {
+  idea: 'bg-warning-soft text-warning',
+  note: 'bg-accent-soft text-accent',
+  important: 'bg-secondary-soft text-secondary',
 }
 
-const moodLabel: Record<string, string> = {
-  happy: '开心', calm: '平静', sad: '难过', angry: '烦躁', tired: '疲惫',
-}
-
-const moodChipColor: Record<string, string> = {
-  happy: 'bg-warning-soft text-warning',
-  calm: 'bg-accent-soft text-accent',
-  sad: 'bg-primary-soft text-primary',
-  angry: 'bg-secondary-soft text-secondary',
-  tired: 'bg-gray-100 dark:bg-gray-800 text-text-secondary',
-}
-
-export default function DiaryEditPage() {
+export default function IdeaEditPage() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { diaries, addDiary, updateDiary, deleteDiary } = useDiaryStore()
+  const { ideas, addIdea, updateIdea, deleteIdea } = useIdeaStore()
 
-  const existing = id ? diaries.find((d) => d.id === id) : undefined
+  const existing = id ? ideas.find((i) => i.id === id) : undefined
   const isNew = !id
 
   const [isEditing, setIsEditing] = useState(isNew)
-  const [date, setDate] = useState(existing?.date ?? dayjs().format('YYYY-MM-DD'))
+  const [title, setTitle] = useState(existing?.title ?? '')
   const [content, setContent] = useState(existing?.content ?? '')
-  const [mood, setMood] = useState<Diary['mood']>(existing?.mood ?? 'calm')
+  const [category, setCategory] = useState<IdeaCategory>(existing?.category ?? 'idea')
   const [tags, setTags] = useState<string[]>(existing?.tags ?? [])
   const [tagInput, setTagInput] = useState('')
   const [showDelete, setShowDelete] = useState(false)
 
   useEffect(() => {
-    if (id && !existing) navigate('/diary', { replace: true })
+    if (id && !existing) navigate('/idea', { replace: true })
   }, [id, existing, navigate])
 
   const addTagFromInput = () => {
@@ -64,48 +54,47 @@ export default function DiaryEditPage() {
   }
 
   const handleSave = () => {
-    const trimmed = content.trim()
-    if (!trimmed) return
+    const trimmedTitle = title.trim()
+    const trimmedContent = content.trim()
+    if (!trimmedTitle && !trimmedContent) return
+    const finalTitle = trimmedTitle || trimmedContent.slice(0, 20)
     if (existing) {
-      updateDiary(existing.id, { content: trimmed, mood, tags })
+      updateIdea(existing.id, { title: finalTitle, content: trimmedContent, category, tags })
       setIsEditing(false)
     } else {
-      addDiary({ date, content: trimmed, mood, tags })
-      navigate('/diary')
+      addIdea(finalTitle, trimmedContent, category, tags)
+      navigate('/idea')
     }
   }
 
   const handleCancel = () => {
     if (existing) {
-      // Reset to saved values
+      setTitle(existing.title)
       setContent(existing.content)
-      setMood(existing.mood)
+      setCategory(existing.category)
       setTags(existing.tags ?? [])
       setTagInput('')
       setIsEditing(false)
     } else {
-      navigate('/diary')
+      navigate('/idea')
     }
   }
 
   const handleDelete = () => {
     if (existing) {
-      deleteDiary(existing.id)
-      navigate('/diary')
+      deleteIdea(existing.id)
+      navigate('/idea')
     }
   }
 
   // ─── Read Mode ───
   if (!isEditing && existing) {
-    const dateObj = dayjs(existing.date)
-    const weekdays = ['日', '一', '二', '三', '四', '五', '六']
-
     return (
       <div className="p-5 pb-24 animate-fade-in">
         {/* Top bar */}
         <div className="flex items-center justify-between mb-6">
           <button
-            onClick={() => navigate('/diary')}
+            onClick={() => navigate('/idea')}
             className="flex items-center gap-1 text-primary text-sm font-medium"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
@@ -125,17 +114,15 @@ export default function DiaryEditPage() {
           </button>
         </div>
 
-        {/* Date */}
-        <p className="text-sm text-text-secondary dark:text-text-secondary-dark font-medium mb-3">
-          {dateObj.format('YYYY年M月D日')} 星期{weekdays[dateObj.day()]}
-        </p>
-
-        {/* Mood */}
-        <div className="mb-5">
-          <span className={`chip ${moodChipColor[existing.mood]}`}>
-            {moodEmoji[existing.mood]} {moodLabel[existing.mood]}
+        {/* Category */}
+        <div className="mb-4">
+          <span className={`chip ${categoryChipColor[existing.category]}`}>
+            {categoryEmoji[existing.category]} {categoryLabel[existing.category]}
           </span>
         </div>
+
+        {/* Title */}
+        <h1 className="text-xl font-bold mb-4">{existing.title}</h1>
 
         {/* Content */}
         <div className="card p-5 mb-5">
@@ -157,7 +144,7 @@ export default function DiaryEditPage() {
 
         {/* Metadata */}
         <p className="text-[10px] text-text-tertiary mb-6">
-          写于 {dayjs(existing.createdAt).format('M/D HH:mm')}
+          创建于 {dayjs(existing.createdAt).format('M/D HH:mm')}
           {existing.updatedAt !== existing.createdAt && (
             <> · 编辑于 {dayjs(existing.updatedAt).format('M/D HH:mm')}</>
           )}
@@ -167,7 +154,7 @@ export default function DiaryEditPage() {
         <div className="mt-4">
           {showDelete ? (
             <div className="card p-4 border-danger/20 animate-scale-in">
-              <p className="text-sm text-danger mb-3 font-medium">确定要删除这篇日记吗？</p>
+              <p className="text-sm text-danger mb-3 font-medium">确定要删除这条灵感吗？</p>
               <div className="flex gap-2">
                 <button onClick={handleDelete} className="flex-1 bg-danger text-white rounded-xl py-2.5 text-sm font-medium">
                   确认删除
@@ -179,7 +166,7 @@ export default function DiaryEditPage() {
             </div>
           ) : (
             <button onClick={() => setShowDelete(true)} className="w-full text-danger/60 text-sm py-2 hover:text-danger transition-colors">
-              删除这篇日记
+              删除这条灵感
             </button>
           )}
         </div>
@@ -207,47 +194,47 @@ export default function DiaryEditPage() {
             </>
           )}
         </button>
-        <h2 className="text-base font-bold">{existing ? '编辑日记' : '写日记'}</h2>
+        <h2 className="text-base font-bold">{existing ? '编辑灵感' : '记录灵感'}</h2>
         <button
           onClick={handleSave}
-          disabled={!content.trim()}
+          disabled={!title.trim() && !content.trim()}
           className="btn-primary !px-5 !py-2 text-sm"
         >
           保存
         </button>
       </div>
 
-      {/* Date */}
+      {/* Category */}
       <div className="mb-4">
-        <label className="text-xs text-text-secondary dark:text-text-secondary-dark font-medium mb-1.5 block">日期</label>
-        <input
-          type="date"
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-          disabled={!!existing}
-          className="input disabled:opacity-40"
-        />
-      </div>
-
-      {/* Mood */}
-      <div className="mb-4">
-        <label className="text-xs text-text-secondary dark:text-text-secondary-dark font-medium mb-2 block">今天的心情</label>
+        <label className="text-xs text-text-secondary dark:text-text-secondary-dark font-medium mb-2 block">类型</label>
         <div className="flex gap-2">
-          {moods.map((m) => (
+          {categories.map((c) => (
             <button
-              key={m.value}
-              onClick={() => setMood(m.value)}
-              className={`flex-1 flex flex-col items-center gap-1.5 py-3 rounded-2xl text-xs font-medium border-2 transition-all ${
-                mood === m.value
-                  ? m.color
-                  : 'border-transparent bg-gray-50 dark:bg-gray-800/50'
+              key={c.value}
+              onClick={() => setCategory(c.value)}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-medium border-2 transition-all ${
+                category === c.value
+                  ? `${c.color} border-current`
+                  : 'border-transparent bg-gray-50 dark:bg-gray-800 text-text-secondary'
               }`}
             >
-              <span className={`text-2xl transition-transform ${mood === m.value ? 'scale-110' : ''}`}>{m.emoji}</span>
-              <span>{m.label}</span>
+              <span>{c.emoji}</span>
+              {c.label}
             </button>
           ))}
         </div>
+      </div>
+
+      {/* Title */}
+      <div className="mb-4">
+        <label className="text-xs text-text-secondary dark:text-text-secondary-dark font-medium mb-1.5 block">标题</label>
+        <input
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="给灵感起个标题..."
+          className="input"
+          autoFocus
+        />
       </div>
 
       {/* Tags */}
@@ -287,8 +274,7 @@ export default function DiaryEditPage() {
         <textarea
           value={content}
           onChange={(e) => setContent(e.target.value)}
-          placeholder="写下今天的故事..."
-          autoFocus
+          placeholder="记录你的想法..."
           className="input resize-none min-h-[220px] h-full text-[15px] leading-loose"
         />
       </div>
