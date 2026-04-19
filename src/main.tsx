@@ -14,12 +14,13 @@ function render() {
   )
 }
 
-initApp()
-  .then(render)
-  .catch((err) => {
-    console.error('[LifeOS] initApp failed, rendering anyway:', err)
-    render()
-  })
+// 先渲染，不阻塞 UI
+render()
+
+// 后台初始化数据库
+initApp().catch((err) => {
+  console.error('[LifeOS] initApp failed:', err)
+})
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
