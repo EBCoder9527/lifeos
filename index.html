@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/lifeos/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="theme-color" content="#faf8f5" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="LifeOS" />
+    <link rel="manifest" href="/lifeos/manifest.json" />
+    <link rel="apple-touch-icon" href="/lifeos/icon-192.png" />
+    <title>LifeOS</title>
+    <script type="module" crossorigin src="/lifeos/assets/index-Bi8ooMXI.js"></script>
+    <link rel="stylesheet" crossorigin href="/lifeos/assets/index-BjCS-e6y.css">
+  </head>
+  <body>
+    <div id="root"><p id="_boot" style="text-align:center;padding:80px 20px;font-family:system-ui;color:#888">Loading...</p></div>
+    <script>
+      // SPA redirect handler for GitHub Pages 404 hack
+      (function(l) {
+        if (l.search[1] === '/') {
+          var decoded = l.search.slice(1).split('&').map(function(s) {
+            return s.replace(/~and~/g, '&')
+          }).join('?');
+          window.history.replaceState(null, null, l.pathname.slice(0, -1) + decoded + l.hash);
+        }
+      }(window.location));
+    </script>
+    <script>
+      window.onerror=function(m,s,l,c,e){
+        document.getElementById('_boot').innerHTML='<b style="color:red">Error</b><br><pre style="text-align:left;font-size:12px;white-space:pre-wrap;word-break:break-all">'+m+'\n'+s+':'+l+':'+c+(e&&e.stack?'\n'+e.stack:'')+'</pre>';
+      };
+      window.addEventListener('unhandledrejection',function(ev){
+        document.getElementById('_boot').innerHTML='<b style="color:red">Error</b><br><pre style="text-align:left;font-size:12px;white-space:pre-wrap;word-break:break-all">'+ev.reason+'</pre>';
+      });
+    </script>
+  </body>
+</html>
