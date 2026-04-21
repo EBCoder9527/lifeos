@@ -6,11 +6,11 @@ interface TaskMoveSheetProps {
   open: boolean
   onClose: () => void
   taskId: string
-  currentWeekPlanId: string | null
+  currentWeekPlanId?: string | null // fix: kept for interface compat, no longer used for filtering
   onMoved?: (msg: string) => void
 }
 
-export function TaskMoveSheet({ open, onClose, taskId, currentWeekPlanId, onMoved }: TaskMoveSheetProps) {
+export function TaskMoveSheet({ open, onClose, taskId, onMoved }: TaskMoveSheetProps) {
   const store = usePlanStore()
 
   // fix: use task's actual week — independent/orphaned tasks should not exclude any week
