@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router'
 import { useIdeaStore } from '../../stores/idea'
+import { stripHtml } from '../../utils/html'
 import dayjs from 'dayjs'
 import type { IdeaCategory } from '../../types'
 
@@ -25,6 +26,7 @@ export default function IdeaPage() {
   const [search, setSearch] = useState('')
   const [categoryFilter, setCategoryFilter] = useState<IdeaCategory | 'all'>('all')
   const [selectedTags, setSelectedTags] = useState<string[]>([])
+  const [tagsExpanded, setTagsExpanded] = useState(false)
 
   // All unique tags
   const allTags = useMemo(() => {
@@ -106,8 +108,8 @@ export default function IdeaPage() {
 
       {/* Tag filter */}
       {allTags.length > 0 && (
-        <div className="flex gap-1.5 flex-wrap mb-5">
-          {allTags.map((tag) => (
+        <div className="flex gap-1.5 flex-wrap mb-5 items-center">
+          {(tagsExpanded ? allTags : allTags.slice(0, 4)).map((tag) => (
             <button
               key={tag}
               onClick={() => toggleTag(tag)}
@@ -120,6 +122,14 @@ export default function IdeaPage() {
               #{tag}
             </button>
           ))}
+          {allTags.length > 4 && (
+            <button
+              onClick={() => setTagsExpanded((v) => !v)}
+              className="chip bg-gray-50 dark:bg-gray-800 text-text-secondary dark:text-text-secondary-dark"
+            >
+              {tagsExpanded ? '收起' : `+${allTags.length - 4}`}
+            </button>
+          )}
         </div>
       )}
 
@@ -153,7 +163,7 @@ export default function IdeaPage() {
                   {/* Content preview */}
                   {idea.content && (
                     <p className="text-xs text-text-secondary dark:text-text-secondary-dark mt-1 line-clamp-2 leading-relaxed">
-                      {idea.content}
+                      {stripHtml(idea.content)}
                     </p>
                   )}
                   {/* Tags + time */}
@@ -180,7 +190,8 @@ export default function IdeaPage() {
       {/* FAB */}
       <button
         onClick={() => navigate('/idea/new')}
-        className="fixed right-5 bottom-24 w-14 h-14 rounded-full bg-gradient-to-br from-primary to-primary-light text-white shadow-lg shadow-primary/30 flex items-center justify-center z-40 active:scale-95 transition-transform"
+        className="fixed right-5 w-14 h-14 rounded-full bg-gradient-to-br from-primary to-primary-light text-white shadow-lg shadow-primary/30 flex items-center justify-center z-40 active:scale-95 transition-transform"
+        style={{ bottom: 'calc(6rem + env(safe-area-inset-bottom, 0px))' }}
       >
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
           <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />

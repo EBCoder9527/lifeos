@@ -11,6 +11,10 @@ export default function QuarterDetailPage() {
   const navigate = useNavigate()
   const store = usePlanStore()
   const [showAdd, setShowAdd] = useState(false)
+  const [showEdit, setShowEdit] = useState(false)
+  const [showDelete, setShowDelete] = useState(false)
+  const [editTitle, setEditTitle] = useState('')
+  const [editKRs, setEditKRs] = useState('')
 
   const quarter = store.quarterGoals.find((q) => q.id === id)
   if (!quarter) return <div className="p-5 text-center text-text-tertiary">季度目标不存在</div>
@@ -18,6 +22,25 @@ export default function QuarterDetailPage() {
   const yearGoal = store.yearGoals.find((y) => y.id === quarter.yearGoalId)
   const months = useMemo(() => store.getMonthPlans(quarter.id), [store, quarter.id])
   const progress = store.getQuarterProgress(quarter.id)
+
+  const openEdit = () => {
+    setEditTitle(quarter.title)
+    setEditKRs(quarter.keyResults.join('\n'))
+    setShowEdit(true)
+  }
+
+  const handleSaveEdit = () => {
+    const t = editTitle.trim()
+    if (!t) return
+    const krs = editKRs.split('\n').map((s) => s.trim()).filter(Boolean)
+    store.updateQuarterGoal(quarter.id, { title: t, keyResults: krs })
+    setShowEdit(false)
+  }
+
+  const handleDelete = () => {
+    store.deleteQuarterGoal(quarter.id)
+    navigate(-1)
+  }
 
   return (
     <div className="p-5 stagger-children">
@@ -29,7 +52,12 @@ export default function QuarterDetailPage() {
           </svg>
           返回
         </button>
-        <LayerIndicator layer="phase" />
+        <div className="flex items-center gap-2">
+          <button onClick={openEdit} className="flex items-center gap-1 text-primary text-sm font-medium px-3 py-1.5 rounded-full bg-primary-soft">
+            编辑
+          </button>
+          <LayerIndicator layer="phase" />
+        </div>
       </div>
 
       {/* Breadcrumb */}
@@ -132,6 +160,42 @@ export default function QuarterDetailPage() {
           store.addMonthPlan({ quarterGoalId: quarter.id, year: quarter.year, ...data })
         }}
       />
+
+      {/* Edit sheet */}
+      {showEdit && (
+        <div className="overlay" onClick={(e) => e.target === e.currentTarget && setShowEdit(false)}>
+          <div className="w-full max-w-lg bg-surface dark:bg-surface-dark rounded-t-3xl p-5 safe-bottom animate-slide-up">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold">编辑季度目标</h3>
+              <button onClick={() => setShowEdit(false)} className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 dark:bg-gray-700 text-text-secondary">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                  <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+            <input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} placeholder="季度目标标题" className="input mb-3" autoFocus />
+            <textarea value={editKRs} onChange={(e) => setEditKRs(e.target.value)} placeholder="关键结果（每行一个）" rows={4} className="input resize-none mb-4" />
+            <button onClick={handleSaveEdit} disabled={!editTitle.trim()} className="btn-primary w-full !py-3">保存</button>
+          </div>
+        </div>
+      )}
+
+      {/* Delete */}
+      <div className="mt-6">
+        {showDelete ? (
+          <div className="card p-4 border-danger/20 animate-scale-in">
+            <p className="text-sm text-danger mb-3 font-medium">确定要删除这个季度目标吗？</p>
+            <div className="flex gap-2">
+              <button onClick={handleDelete} className="flex-1 bg-danger text-white rounded-xl py-2.5 text-sm font-medium">确认删除</button>
+              <button onClick={() => setShowDelete(false)} className="flex-1 bg-gray-100 dark:bg-gray-800 rounded-xl py-2.5 text-sm font-medium">取消</button>
+            </div>
+          </div>
+        ) : (
+          <button onClick={() => setShowDelete(true)} className="w-full text-danger/60 text-sm py-2 hover:text-danger transition-colors">
+            删除这个季度目标
+          </button>
+        )}
+      </div>
     </div>
   )
 }

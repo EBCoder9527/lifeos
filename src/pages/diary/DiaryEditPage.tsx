@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router'
 import { useDiaryStore } from '../../stores/diary'
+import { RichTextEditor } from '../../components/RichTextEditor'
+import { RichTextViewer } from '../../components/RichTextViewer'
+import { useMessage } from '../../hooks/useMessage' // fix: unified showMessage
 import dayjs from 'dayjs'
 import type { Diary } from '../../types'
 
@@ -43,6 +46,9 @@ export default function DiaryEditPage() {
   const [tags, setTags] = useState<string[]>(existing?.tags ?? [])
   const [tagInput, setTagInput] = useState('')
   const [showDelete, setShowDelete] = useState(false)
+  const { showMessage } = useMessage() // fix: unified showMessage
+
+  const showToast = (msg: string) => showMessage('success', msg) // fix: delegate to global
 
   useEffect(() => {
     if (id && !existing) navigate('/diary', { replace: true })
@@ -64,13 +70,14 @@ export default function DiaryEditPage() {
   }
 
   const handleSave = () => {
-    const trimmed = content.trim()
+    const trimmed = content.replace(/<[^>]*>/g, '').trim()
     if (!trimmed) return
     if (existing) {
-      updateDiary(existing.id, { content: trimmed, mood, tags })
+      updateDiary(existing.id, { date, content, mood, tags })
       setIsEditing(false)
+      showToast('日记已保存')
     } else {
-      addDiary({ date, content: trimmed, mood, tags })
+      addDiary({ date, content, mood, tags })
       navigate('/diary')
     }
   }
@@ -78,6 +85,7 @@ export default function DiaryEditPage() {
   const handleCancel = () => {
     if (existing) {
       // Reset to saved values
+      setDate(existing.date)
       setContent(existing.content)
       setMood(existing.mood)
       setTags(existing.tags ?? [])
@@ -139,9 +147,7 @@ export default function DiaryEditPage() {
 
         {/* Content */}
         <div className="card p-5 mb-5">
-          <div className="diary-content whitespace-pre-wrap">
-            {existing.content}
-          </div>
+          <RichTextViewer content={existing.content} className="diary-content" />
         </div>
 
         {/* Tags */}
@@ -183,6 +189,8 @@ export default function DiaryEditPage() {
             </button>
           )}
         </div>
+
+        {/* fix: toast now handled by global MessageProvider */}
       </div>
     )
   }
@@ -210,7 +218,7 @@ export default function DiaryEditPage() {
         <h2 className="text-base font-bold">{existing ? '编辑日记' : '写日记'}</h2>
         <button
           onClick={handleSave}
-          disabled={!content.trim()}
+          disabled={!content.replace(/<[^>]*>/g, '').trim()}
           className="btn-primary !px-5 !py-2 text-sm"
         >
           保存
@@ -224,8 +232,7 @@ export default function DiaryEditPage() {
           type="date"
           value={date}
           onChange={(e) => setDate(e.target.value)}
-          disabled={!!existing}
-          className="input disabled:opacity-40"
+          className="input"
         />
       </div>
 
@@ -284,12 +291,12 @@ export default function DiaryEditPage() {
       {/* Content */}
       <div className="flex-1 mb-4">
         <label className="text-xs text-text-secondary dark:text-text-secondary-dark font-medium mb-1.5 block">内容</label>
-        <textarea
+        <RichTextEditor
           value={content}
-          onChange={(e) => setContent(e.target.value)}
+          onChange={setContent}
           placeholder="写下今天的故事..."
           autoFocus
-          className="input resize-none min-h-[220px] h-full text-[15px] leading-loose"
+          className="input !p-0 overflow-hidden min-h-[220px]"
         />
       </div>
     </div>

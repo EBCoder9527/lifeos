@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback } from 'react'
+import { useMemo, useState, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router'
 import { useHabitStore } from '../../stores/habit'
 import { ProgressRing } from '../../components/ProgressRing'
@@ -22,6 +22,8 @@ export default function HabitPage() {
   const [selectedDate, setSelectedDate] = useState(todayStr)
   const [weekOffset, setWeekOffset] = useState(0) // 0 = current week, -1 = last week, etc.
   const [justChecked, setJustChecked] = useState<string | null>(null)
+  const [showCongrats, setShowCongrats] = useState(false)
+  const congratsShownRef = useRef<string | null>(null) // 记录当天是否已弹过
 
   const isToday = selectedDate === todayStr
 
@@ -65,6 +67,20 @@ export default function HabitPage() {
     })
   }, [weekDates, activeHabits, records, isHabitScheduledForDate])
 
+  // 排序：未完成在上，已完成在下
+  const sortedHabits = useMemo(
+    () => [...scheduledHabits].sort((a, b) => {
+      const aDone = selectedDateRecordIds.has(a.id) ? 1 : 0
+      const bDone = selectedDateRecordIds.has(b.id) ? 1 : 0
+      return aDone - bDone
+    }),
+    [scheduledHabits, selectedDateRecordIds]
+  )
+
+  // Progress for selected date
+  const totalScheduled = scheduledHabits.length
+  const completedCount = scheduledHabits.filter((h) => selectedDateRecordIds.has(h.id)).length
+
   const handleToggle = useCallback((habitId: string) => {
     if (!isToday) return
     const wasDone = selectedDateRecordIds.has(habitId)
@@ -72,12 +88,15 @@ export default function HabitPage() {
     if (!wasDone) {
       setJustChecked(habitId)
       setTimeout(() => setJustChecked(null), 600)
+      // 检查是否刚好完成了最后一个
+      const newCompletedCount = completedCount + 1
+      if (newCompletedCount === totalScheduled && totalScheduled > 0 && congratsShownRef.current !== todayStr) {
+        congratsShownRef.current = todayStr
+        setTimeout(() => setShowCongrats(true), 400)
+        setTimeout(() => setShowCongrats(false), 3000)
+      }
     }
-  }, [isToday, selectedDateRecordIds, toggleRecord, todayStr])
-
-  // Progress for selected date
-  const totalScheduled = scheduledHabits.length
-  const completedCount = scheduledHabits.filter((h) => selectedDateRecordIds.has(h.id)).length
+  }, [isToday, selectedDateRecordIds, toggleRecord, todayStr, completedCount, totalScheduled])
   const habitProgress = totalScheduled > 0 ? completedCount / totalScheduled : 0
 
   // Date label
@@ -316,7 +335,7 @@ export default function HabitPage() {
             </div>
           ) : (
             <div className="space-y-3 mb-6">
-              {scheduledHabits.map((habit) => {
+              {sortedHabits.map((habit) => {
                 const done = selectedDateRecordIds.has(habit.id)
                 const streak = getStreak(habit.id)
                 const isPopping = justChecked === habit.id
@@ -338,7 +357,7 @@ export default function HabitPage() {
                     </ProgressRing>
 
                     <div className="flex-1 text-left">
-                      <p className={`font-medium text-sm ${done ? 'text-success' : ''}`}>
+                      <p className={`font-medium text-sm ${done ? 'text-success line-through' : ''}`}>
                         {habit.name}
                       </p>
                       <div className="flex items-center gap-2 mt-0.5">
@@ -371,6 +390,16 @@ export default function HabitPage() {
             </div>
           )}
         </>
+      )}
+
+      {/* 全部完成鼓励提示 */}
+      {showCongrats && (
+        <div className="fixed inset-x-0 top-16 flex justify-center z-50 animate-fade-in-up">
+          <div className="bg-success text-white px-6 py-3 rounded-2xl shadow-lg flex items-center gap-2 text-sm font-medium">
+            <span className="text-lg">🎉</span>
+            今日习惯全部完成，太棒了！
+          </div>
+        </div>
       )}
     </div>
   )

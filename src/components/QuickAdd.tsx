@@ -112,7 +112,8 @@ export function QuickAdd() {
       {/* FAB */}
       <button
         onClick={handleOpen}
-        className="fixed right-5 bottom-24 w-14 h-14 rounded-full bg-gradient-to-br from-primary to-primary-light text-white shadow-lg shadow-primary/30 flex items-center justify-center z-40 active:scale-95 transition-transform"
+        className="fixed right-5 w-14 h-14 rounded-full bg-gradient-to-br from-primary to-primary-light text-white shadow-lg shadow-primary/30 flex items-center justify-center z-40 active:scale-95 transition-transform"
+        style={{ bottom: 'calc(6rem + env(safe-area-inset-bottom, 0px))' }}
       >
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
           <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />

@@ -1,39 +1,199 @@
-import { db, storage } from './index'
+import { db } from './index'
 import { getDeviceId } from './device'
 import type {
   AppExportData, AppSettings,
   Diary, Habit, HabitRecord, Idea,
   YearGoal, QuarterGoal, MonthPlan, WeekPlan, PlanTask,
+  SyncStatus,
 } from './types'
 
 export const SCHEMA_VERSION = 3
 const APP_VERSION = '0.0.0'
 
+// ─── localStorage helpers ───────────────────────────────────
+
+interface ZustandPersisted<T> {
+  state: T
+  version: number
+}
+
+function readZustandStore<T>(key: string): T | null {
+  const raw = localStorage.getItem(key)
+  if (!raw) return null
+  try {
+    const parsed = JSON.parse(raw) as ZustandPersisted<T>
+    return parsed.state ?? null
+  } catch {
+    return null
+  }
+}
+
+function baseFields(src: { id: string; createdAt?: number; updatedAt?: number }) {
+  const now = Date.now()
+  return {
+    id: src.id,
+    createdAt: src.createdAt ?? now,
+    updatedAt: src.updatedAt ?? now,
+    deletedAt: null as number | null,
+    _ver: 1,
+    _sync: {
+      userId: null as string | null,
+      deviceId: getDeviceId(),
+      status: 'local' as SyncStatus,
+      lastSyncedAt: null as number | null,
+    },
+  }
+}
+
+// Zustand state shapes (same as init.ts)
+interface LSDiaryState { diaries: Array<{ id: string; date: string; content: string; mood?: string; tags?: string[]; createdAt: number; updatedAt?: number }> }
+interface LSHabitState { habits: Array<{ id: string; name: string; icon: string; color: string; frequency?: { type: string; days?: number[] }; createdAt: number; archivedAt?: number }>; records: Array<{ id: string; habitId: string; date: string; createdAt: number }> }
+interface LSIdeaState { ideas: Array<{ id: string; title?: string; content: string; category?: string; tags: string[]; createdAt: number; updatedAt?: number }> }
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+interface LSPlanState { yearGoals: Array<Record<string, any>>; quarterGoals: Array<Record<string, any>>; monthPlans: Array<Record<string, any>>; weekPlans: Array<Record<string, any>>; tasks: Array<Record<string, any>> }
+interface LSTaskState { tasks: Array<{ id: string; title: string; done: boolean; priority?: string; category?: string; dueDate?: string; createdAt: number; doneAt?: number }> }
+interface LSSettingsState { theme: 'light' | 'dark' }
+
 // ─── Export ─────────────────────────────────────────────────
 
-/** 从所有表读取完整数据（含已删除），组装为 AppExportData */
-export async function exportData(): Promise<AppExportData> {
-  const [
-    diaries, habits, habitRecords, ideas,
-    yearGoals, quarterGoals, monthPlans, weekPlans,
-    tasks, scheduleEvents, settings,
-  ] = await Promise.all([
-    storage.diary.getAll(true),
-    storage.habit.getAll(true),
-    storage.habitRecord.getAll(true),
-    storage.idea.getAll(true),
-    storage.plan.yearGoal.getAll(true),
-    storage.plan.quarterGoal.getAll(true),
-    storage.plan.monthPlan.getAll(true),
-    storage.plan.weekPlan.getAll(true),
-    storage.task.getAll(true),
-    storage.schedule.getAll(true),
-    storage.settings.get(),
-  ])
+/**
+ * 从 localStorage（Zustand stores）读取完整数据，组装为 AppExportData。
+ * 这是数据的唯一来源 — Dexie 可能为空（iOS PWA 等场景）。
+ */
+export function exportData(): AppExportData {
+  const now = Date.now()
+
+  // ── Diaries ──
+  const diaryState = readZustandStore<LSDiaryState>('dayflow_diaries')
+  const diaries: Diary[] = (diaryState?.diaries ?? []).map((d) => ({
+    ...baseFields(d),
+    date: d.date,
+    content: d.content,
+    mood: (d.mood ?? 'calm') as Diary['mood'],
+    tags: d.tags ?? [],
+  }))
+
+  // ── Habits + HabitRecords ──
+  const habitState = readZustandStore<LSHabitState>('dayflow_habits')
+  const habits: Habit[] = (habitState?.habits ?? []).map((h, i) => ({
+    ...baseFields({ id: h.id, createdAt: h.createdAt }),
+    name: h.name,
+    icon: h.icon,
+    color: h.color,
+    frequency: (h.frequency ?? { type: 'daily' }) as Habit['frequency'],
+    sortOrder: i,
+    archivedAt: h.archivedAt ?? null,
+  }))
+  const habitRecords: HabitRecord[] = (habitState?.records ?? []).map((r) => ({
+    ...baseFields({ id: r.id, createdAt: r.createdAt }),
+    habitId: r.habitId,
+    date: r.date,
+    status: 'done' as const,
+    value: null,
+    note: null,
+  }))
+
+  // ── Ideas ──
+  const ideaState = readZustandStore<LSIdeaState>('dayflow_ideas')
+  const ideas: Idea[] = (ideaState?.ideas ?? []).map((i) => ({
+    ...baseFields(i),
+    title: i.title ?? i.content.slice(0, 20),
+    content: i.content,
+    category: (i.category ?? 'idea') as Idea['category'],
+    tags: i.tags ?? [],
+    isPinned: false,
+  }))
+
+  // ── Plan hierarchy ──
+  const planState = readZustandStore<LSPlanState>('dayflow_plan')
+
+  const yearGoals: YearGoal[] = (planState?.yearGoals ?? []).map((g) => ({
+    ...baseFields(g as { id: string; createdAt?: number; updatedAt?: number }),
+    year: (g.year ?? new Date().getFullYear()) as number,
+    title: (g.title ?? '') as string,
+    vision: (g.vision ?? '') as string,
+    category: (g.category ?? 'other') as YearGoal['category'],
+    status: (g.status ?? 'active') as YearGoal['status'],
+  }))
+
+  const quarterGoals: QuarterGoal[] = (planState?.quarterGoals ?? []).map((g) => ({
+    ...baseFields(g as { id: string; createdAt?: number; updatedAt?: number }),
+    yearGoalId: (g.yearGoalId ?? '') as string,
+    quarter: (g.quarter ?? 1) as QuarterGoal['quarter'],
+    year: (g.year ?? new Date().getFullYear()) as number,
+    title: (g.title ?? '') as string,
+    keyResults: (g.keyResults ?? []) as string[],
+    status: (g.status ?? 'active') as QuarterGoal['status'],
+  }))
+
+  const monthPlans: MonthPlan[] = (planState?.monthPlans ?? []).map((p) => ({
+    ...baseFields(p as { id: string; createdAt?: number; updatedAt?: number }),
+    quarterGoalId: (p.quarterGoalId ?? null) as string | null,
+    year: (p.year ?? new Date().getFullYear()) as number,
+    month: (p.month ?? 1) as number,
+    title: (p.title ?? '') as string,
+    description: (p.description ?? '') as string,
+    status: (p.status ?? 'active') as MonthPlan['status'],
+  }))
+
+  const weekPlans: WeekPlan[] = (planState?.weekPlans ?? []).map((w) => ({
+    ...baseFields(w as { id: string; createdAt?: number; updatedAt?: number }),
+    monthPlanId: (w.monthPlanId ?? null) as string | null,
+    year: (w.year ?? new Date().getFullYear()) as number,
+    weekNumber: (w.weekNumber ?? 1) as number,
+    startDate: (w.startDate ?? '') as string,
+    endDate: (w.endDate ?? '') as string,
+    title: (w.title ?? '') as string,
+    reflection: (w.reflection ?? '') as string,
+    status: (w.status ?? 'active') as WeekPlan['status'],
+  }))
+
+  // Plan tasks (weekPlanId !== null) from dayflow_plan
+  const planTasks: PlanTask[] = (planState?.tasks ?? []).map((t) => {
+    const isDone = t.done === true
+    return {
+      ...baseFields(t as { id: string; createdAt?: number; updatedAt?: number }),
+      weekPlanId: (t.weekPlanId ?? null) as string | null,
+      title: (t.title ?? '') as string,
+      status: isDone ? 'done' as const : 'todo' as const,
+      priority: (t.priority ?? 'medium') as PlanTask['priority'],
+      category: (t.category ?? null) as string | null,
+      scheduledDate: (t.scheduledDate ?? null) as string | null,
+      doneAt: isDone ? ((t.doneAt as number) ?? now) : null,
+    }
+  })
+
+  // Standalone tasks (weekPlanId === null) from dayflow_tasks
+  const taskState = readZustandStore<LSTaskState>('dayflow_tasks')
+  const standaloneTasks: PlanTask[] = (taskState?.tasks ?? []).map((t) => {
+    const isDone = t.done === true
+    return {
+      ...baseFields({ id: t.id, createdAt: t.createdAt }),
+      weekPlanId: null,
+      title: t.title,
+      status: isDone ? 'done' as const : 'todo' as const,
+      priority: (t.priority ?? 'medium') as PlanTask['priority'],
+      category: (t.category ?? null) as string | null,
+      scheduledDate: (t.dueDate ?? null) as string | null,
+      doneAt: isDone ? (t.doneAt ?? now) : null,
+    }
+  })
+
+  const allTasks = [...planTasks, ...standaloneTasks]
+
+  // ── Settings ──
+  const settingsState = readZustandStore<LSSettingsState>('dayflow_settings')
+  const settings: AppSettings = {
+    id: 'default',
+    theme: settingsState?.theme === 'dark' ? 'dark' : 'light',
+    locale: 'zh-CN',
+    weekStartsOn: 1,
+    updatedAt: now,
+  }
 
   return {
     schemaVersion: SCHEMA_VERSION,
-    exportedAt: Date.now(),
+    exportedAt: now,
     deviceInfo: {
       deviceId: getDeviceId(),
       platform: navigator.platform ?? 'unknown',
@@ -49,33 +209,32 @@ export async function exportData(): Promise<AppExportData> {
       quarterGoals,
       monthPlans,
       weekPlans,
-      tasks,
-      scheduleEvents,
+      tasks: allTasks,
+      scheduleEvents: [],  // scheduleEvents 尚未在 Zustand 中持久化
       settings,
     },
   }
 }
 
 /** 导出并触发浏览器下载，文件名 dayflow-backup-YYYY-MM-DD.json */
-export function downloadBackup(): Promise<void> {
-  return exportData().then((payload) => {
-    const json = JSON.stringify(payload, null, 2)
-    const blob = new Blob([json], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
+export function downloadBackup(): void {
+  const payload = exportData()
+  const json = JSON.stringify(payload, null, 2)
+  const blob = new Blob([json], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
 
-    const today = new Date().toISOString().slice(0, 10)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `dayflow-backup-${today}.json`
-    document.body.appendChild(a)
-    a.click()
+  const today = new Date().toISOString().slice(0, 10)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `dayflow-backup-${today}.json`
+  document.body.appendChild(a)
+  a.click()
 
-    // cleanup
-    setTimeout(() => {
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
-    }, 100)
-  })
+  // cleanup
+  setTimeout(() => {
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }, 100)
 }
 
 

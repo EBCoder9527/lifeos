@@ -55,7 +55,7 @@ export default function BackupPage() {
       const total = Object.values(result.counts).reduce((a, b) => a + b, 0)
       // 短暂显示成功提示后刷新页面，让 Zustand 从 localStorage 重新水合
       setMessage({ type: 'success', text: `导入成功，共 ${total} 条记录，即将刷新...` })
-      setTimeout(() => window.location.href = '/today', 1200)
+      setTimeout(() => window.location.reload(), 1200)
     } catch (err) {
       setMessage({ type: 'error', text: `导入失败：${(err as Error).message}` })
       setImporting(false)

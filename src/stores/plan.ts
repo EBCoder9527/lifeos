@@ -5,7 +5,7 @@ import type {
   YearGoal, QuarterGoal, MonthPlan, WeekPlan, PlanTask,
   GoalCategory, GoalStatus, PlanStatus, Priority,
 } from '../types'
-import { getCurrentWeekInfo } from '../utils/week'
+import { getCurrentWeekInfo, getMondayOfCurrentWeek } from '../utils/week'
 
 interface TaskAncestry {
   task: PlanTask
@@ -190,11 +190,7 @@ export const usePlanStore = create<PlanStore>()(
       },
 
       getCurrentWeekPlan: () => {
-        const today = new Date()
-        const dayOfWeek = today.getDay()
-        const monday = new Date(today)
-        monday.setDate(today.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1))
-        const mondayStr = monday.toISOString().split('T')[0]
+        const mondayStr = getMondayOfCurrentWeek().format('YYYY-MM-DD')
         return get().weekPlans.find((w) => w.startDate === mondayStr)
       },
 

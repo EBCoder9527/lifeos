@@ -6,7 +6,7 @@ import type { Diary } from '../types'
 interface DiaryStore {
   diaries: Diary[]
   addDiary: (data: Pick<Diary, 'date' | 'content' | 'mood' | 'tags'>) => void
-  updateDiary: (id: string, data: Partial<Pick<Diary, 'content' | 'mood' | 'tags'>>) => void
+  updateDiary: (id: string, data: Partial<Pick<Diary, 'date' | 'content' | 'mood' | 'tags'>>) => void
   deleteDiary: (id: string) => void
 }
 

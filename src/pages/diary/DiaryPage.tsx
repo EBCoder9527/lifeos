@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router'
 import { useDiaryStore } from '../../stores/diary'
+import { stripHtml } from '../../utils/html'
 import dayjs from 'dayjs'
 
 const moodEmoji: Record<string, string> = {
@@ -215,7 +216,7 @@ export default function DiaryPage() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm leading-relaxed line-clamp-1 whitespace-pre-wrap mb-1.5">
-                          {diary.content}
+                          {stripHtml(diary.content)}
                         </p>
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <span className={`chip ${moodColor[diary.mood]}`}>

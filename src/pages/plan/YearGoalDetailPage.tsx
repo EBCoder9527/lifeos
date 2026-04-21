@@ -10,6 +10,10 @@ export default function YearGoalDetailPage() {
   const navigate = useNavigate()
   const store = usePlanStore()
   const [showAdd, setShowAdd] = useState(false)
+  const [showEdit, setShowEdit] = useState(false)
+  const [showDelete, setShowDelete] = useState(false)
+  const [editTitle, setEditTitle] = useState('')
+  const [editVision, setEditVision] = useState('')
 
   const goal = store.yearGoals.find((g) => g.id === id)
   if (!goal) return <div className="p-5 text-center text-text-tertiary">目标不存在</div>
@@ -17,6 +21,24 @@ export default function YearGoalDetailPage() {
   const cfg = categoryConfig[goal.category]
   const quarters = useMemo(() => store.getQuarterGoals(goal.id), [store, goal.id])
   const progress = store.getYearProgress(goal.id)
+
+  const openEdit = () => {
+    setEditTitle(goal.title)
+    setEditVision(goal.vision || '')
+    setShowEdit(true)
+  }
+
+  const handleSaveEdit = () => {
+    const t = editTitle.trim()
+    if (!t) return
+    store.updateYearGoal(goal.id, { title: t, vision: editVision.trim() || undefined })
+    setShowEdit(false)
+  }
+
+  const handleDelete = () => {
+    store.deleteYearGoal(goal.id)
+    navigate('/plan/year', { replace: true })
+  }
 
   return (
     <div className="p-5 stagger-children">
@@ -28,7 +50,12 @@ export default function YearGoalDetailPage() {
           </svg>
           返回
         </button>
-        <LayerIndicator layer="goal" />
+        <div className="flex items-center gap-2">
+          <button onClick={openEdit} className="flex items-center gap-1 text-primary text-sm font-medium px-3 py-1.5 rounded-full bg-primary-soft">
+            编辑
+          </button>
+          <LayerIndicator layer="goal" />
+        </div>
       </div>
 
       {/* Vision card */}
@@ -134,6 +161,42 @@ export default function YearGoalDetailPage() {
           store.addQuarterGoal({ yearGoalId: goal.id, year: goal.year, ...data })
         }}
       />
+
+      {/* Edit sheet */}
+      {showEdit && (
+        <div className="overlay" onClick={(e) => e.target === e.currentTarget && setShowEdit(false)}>
+          <div className="w-full max-w-lg bg-surface dark:bg-surface-dark rounded-t-3xl p-5 safe-bottom animate-slide-up">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold">编辑目标</h3>
+              <button onClick={() => setShowEdit(false)} className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 dark:bg-gray-700 text-text-secondary">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                  <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+            <input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} placeholder="目标标题" className="input mb-3" autoFocus />
+            <textarea value={editVision} onChange={(e) => setEditVision(e.target.value)} placeholder="愿景描述（可选）" rows={3} className="input resize-none mb-4" />
+            <button onClick={handleSaveEdit} disabled={!editTitle.trim()} className="btn-primary w-full !py-3">保存</button>
+          </div>
+        </div>
+      )}
+
+      {/* Delete */}
+      <div className="mt-6">
+        {showDelete ? (
+          <div className="card p-4 border-danger/20 animate-scale-in">
+            <p className="text-sm text-danger mb-3 font-medium">确定要删除这个年度目标吗？</p>
+            <div className="flex gap-2">
+              <button onClick={handleDelete} className="flex-1 bg-danger text-white rounded-xl py-2.5 text-sm font-medium">确认删除</button>
+              <button onClick={() => setShowDelete(false)} className="flex-1 bg-gray-100 dark:bg-gray-800 rounded-xl py-2.5 text-sm font-medium">取消</button>
+            </div>
+          </div>
+        ) : (
+          <button onClick={() => setShowDelete(true)} className="w-full text-danger/60 text-sm py-2 hover:text-danger transition-colors">
+            删除这个目标
+          </button>
+        )}
+      </div>
     </div>
   )
 }

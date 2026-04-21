@@ -121,6 +121,7 @@ export interface PlanTask {
   done: boolean
   priority: Priority
   scheduledDate?: string
+  isIndependent?: boolean // fix: mark tasks explicitly removed from week plans
   createdAt: number
   doneAt?: number
 }

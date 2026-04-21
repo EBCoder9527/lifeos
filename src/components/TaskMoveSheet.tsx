@@ -7,10 +7,15 @@ interface TaskMoveSheetProps {
   onClose: () => void
   taskId: string
   currentWeekPlanId: string | null
+  onMoved?: (msg: string) => void
 }
 
-export function TaskMoveSheet({ open, onClose, taskId, currentWeekPlanId }: TaskMoveSheetProps) {
+export function TaskMoveSheet({ open, onClose, taskId, currentWeekPlanId, onMoved }: TaskMoveSheetProps) {
   const store = usePlanStore()
+
+  // fix: use task's actual week — independent/orphaned tasks should not exclude any week
+  const task = store.tasks.find((t) => t.id === taskId)
+  const taskWeekPlanId = (task?.isIndependent || !task?.weekPlanId) ? null : task.weekPlanId
 
   const weekOptions = useMemo(() => {
     const now = dayjs()
@@ -18,15 +23,25 @@ export function TaskMoveSheet({ open, onClose, taskId, currentWeekPlanId }: Task
     return store.weekPlans
       .filter((w) => {
         const diff = dayjs(w.startDate).diff(now, 'week')
-        return diff >= -4 && diff <= 3 && w.id !== currentWeekPlanId
+        return diff >= -4 && diff <= 3 && w.id !== taskWeekPlanId // fix: exclude task's current week, not page's
       })
       .sort((a, b) => a.startDate.localeCompare(b.startDate))
-  }, [store.weekPlans, currentWeekPlanId])
+  }, [store.weekPlans, taskWeekPlanId])
 
   if (!open) return null
 
   const handleMove = (targetWeekPlanId: string | null) => {
-    store.updateTask(taskId, { weekPlanId: targetWeekPlanId })
+    // fix: set isIndependent flag for task transfer tracking
+    store.updateTask(taskId, {
+      weekPlanId: targetWeekPlanId,
+      isIndependent: targetWeekPlanId === null,
+    })
+    if (targetWeekPlanId) {
+      const target = store.weekPlans.find((w) => w.id === targetWeekPlanId)
+      onMoved?.(`已移动到第${target?.weekNumber ?? ''}周`)
+    } else {
+      onMoved?.('已移出当前周')
+    }
     onClose()
   }
 

@@ -6,6 +6,7 @@ import { WeekTaskItem } from './components/WeekTaskItem'
 import { AddTaskSheet } from './components/AddTaskSheet'
 import { PlanBreadcrumb } from './components/PlanBreadcrumb'
 import { TaskMoveSheet } from '../../components/TaskMoveSheet'
+import { useMessage } from '../../hooks/useMessage' // fix: unified showMessage
 import dayjs from 'dayjs'
 import isoWeek from 'dayjs/plugin/isoWeek'
 import { getMondayOfWeek, getWeekDates } from '../../utils/week'
@@ -32,6 +33,10 @@ export default function WeekPlanPage() {
   const [showReflection, setShowReflection] = useState(false)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [moveTaskId, setMoveTaskId] = useState<string | null>(null)
+  const [showEditWeek, setShowEditWeek] = useState(false)
+  const [showDeleteWeek, setShowDeleteWeek] = useState(false)
+  const [editWeekTitle, setEditWeekTitle] = useState('')
+  const { showMessage } = useMessage() // fix: unified showMessage
 
   // Determine current week
   const today = dayjs()
@@ -83,6 +88,11 @@ export default function WeekPlanPage() {
     return { yearGoal: yg, quarterGoal: qg, monthPlan: mp, weekPlan }
   }, [weekPlan, store.monthPlans, store.quarterGoals, store.yearGoals])
 
+  // fix: orphaned tasks — weekPlanId null OR explicitly marked independent
+  const orphanedTasks = useMemo(() => {
+    return store.tasks.filter((t) => t.weekPlanId === null || t.isIndependent)
+  }, [store.tasks])
+
   // Week navigation
   const navigateWeek = useCallback((offset: number) => {
     const target = displayMonday.add(offset * 7, 'day')
@@ -103,6 +113,7 @@ export default function WeekPlanPage() {
     if (!isDone) {
       setJustDone(taskId)
       setTimeout(() => setJustDone(null), 700)
+      showToast('任务已完成')
     }
   }
 
@@ -110,16 +121,21 @@ export default function WeekPlanPage() {
     if (deleteId === taskId) {
       store.deleteTask(taskId)
       setDeleteId(null)
+      showToast('任务已删除')
     } else {
       setDeleteId(taskId)
       setTimeout(() => setDeleteId(null), 3000)
     }
   }
 
-  const handleAddTask = (data: { title: string; priority: 'high' | 'medium' | 'low'; scheduledDate?: string }) => {
-    if (!weekPlan) {
+  // fix: replaced local showToast with unified showMessage
+  const showToast = (msg: string) => showMessage('success', msg)
+
+  const handleAddTask = (data: { title: string; priority: 'high' | 'medium' | 'low'; scheduledDates: string[] }) => {
+    let wpId = weekPlan?.id
+    if (!wpId) {
       // Auto-create week plan
-      const wpId = store.addWeekPlan({
+      wpId = store.addWeekPlan({
         monthPlanId: null,
         year: displayMonday.year(),
         weekNumber,
@@ -127,15 +143,45 @@ export default function WeekPlanPage() {
         endDate: displaySunday.format('YYYY-MM-DD'),
         title: '',
       })
-      store.addTask({ weekPlanId: wpId, ...data })
-    } else {
-      store.addTask({ weekPlanId: weekPlan.id, ...data })
     }
+    if (data.scheduledDates.length === 0) {
+      // No date selected — create one unscheduled task
+      store.addTask({ weekPlanId: wpId, title: data.title, priority: data.priority })
+    } else {
+      // Create one task per selected date (backward compatible — each task has single scheduledDate)
+      for (const date of data.scheduledDates) {
+        store.addTask({ weekPlanId: wpId, title: data.title, priority: data.priority, scheduledDate: date })
+      }
+    }
+    setShowAddTask(false)
+    showToast(data.scheduledDates.length > 1 ? `已添加 ${data.scheduledDates.length} 个任务` : '任务添加成功')
   }
 
   const handleReflectionChange = (text: string) => {
     if (weekPlan) {
       store.updateWeekPlan(weekPlan.id, { reflection: text })
+    }
+  }
+
+  const openEditWeek = () => {
+    if (weekPlan) {
+      setEditWeekTitle(weekPlan.title || '')
+      setShowEditWeek(true)
+    }
+  }
+
+  const handleSaveWeekEdit = () => {
+    if (weekPlan) {
+      store.updateWeekPlan(weekPlan.id, { title: editWeekTitle.trim() })
+      setShowEditWeek(false)
+      showToast('周计划已更新')
+    }
+  }
+
+  const handleDeleteWeek = () => {
+    if (weekPlan) {
+      store.deleteWeekPlan(weekPlan.id)
+      navigate('/plan', { replace: true })
     }
   }
 
@@ -169,10 +215,16 @@ export default function WeekPlanPage() {
               今
             </button>
           )}
-          <button onClick={() => navigate('/plan/year')} className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 dark:bg-gray-800 text-text-secondary">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          {weekPlan && (
+            <button onClick={openEditWeek} className="text-xs px-3 py-1.5 rounded-full bg-primary-soft text-primary font-medium">
+              编辑
+            </button>
+          )}
+          <button onClick={() => navigate('/plan/year')} className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-gray-100 dark:bg-gray-800 text-text-secondary text-xs font-medium">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 2L2 7l10 5 10-5-10-5z" /><path d="M2 17l10 5 10-5" /><path d="M2 12l10 5 10-5" />
             </svg>
+            目标
           </button>
         </div>
       </div>
@@ -197,8 +249,8 @@ export default function WeekPlanPage() {
               {doneTasks}/{totalTasks} 任务完成
             </p>
             {weekPlan?.title && (
-              <p className="text-xs text-text-secondary dark:text-text-secondary-dark mb-1">
-                本周主题: {weekPlan.title}
+              <p className="text-base font-extrabold text-primary mb-1">{/* fix: bigger/bolder for 本周主题 */}
+                {weekPlan.title}
               </p>
             )}
             <p className={`text-xs font-medium ${progress >= 1 ? 'text-success' : 'text-primary'}`}>
@@ -278,10 +330,16 @@ export default function WeekPlanPage() {
                           title={task.title}
                           done={task.done}
                           priority={task.priority}
+                          scheduledDate={task.scheduledDate}
+                          weekDates={weekDates}
                           justDone={justDone === task.id}
                           onToggle={() => handleToggle(task.id, task.done)}
                           onDelete={() => handleDelete(task.id)}
                           onMove={() => setMoveTaskId(task.id)}
+                          onEdit={(data) => {
+                            store.updateTask(task.id, data)
+                            showToast('任务已更新')
+                          }}
                         />
                       ))}
                   </div>
@@ -311,10 +369,16 @@ export default function WeekPlanPage() {
                     title={task.title}
                     done={task.done}
                     priority={task.priority}
+                    scheduledDate={task.scheduledDate}
+                    weekDates={weekDates}
                     justDone={justDone === task.id}
                     onToggle={() => handleToggle(task.id, task.done)}
                     onDelete={() => handleDelete(task.id)}
                     onMove={() => setMoveTaskId(task.id)}
+                    onEdit={(data) => {
+                      store.updateTask(task.id, data)
+                      showToast('任务已更新')
+                    }}
                   />
                 ))}
               </div>
@@ -363,10 +427,50 @@ export default function WeekPlanPage() {
         </div>
       )}
 
+      {/* Orphaned/independent tasks */}
+      {orphanedTasks.length > 0 && (
+        <div className="card overflow-hidden mb-5">
+          <div className="flex items-center justify-between px-4 py-2.5 bg-warning-soft/30">
+            <div className="flex items-center gap-2">
+              <span className="text-sm">📦</span>
+              <span className="text-sm font-bold text-text-secondary dark:text-text-secondary-dark">独立任务</span>
+            </div>
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-warning/10 text-warning font-medium">
+              {orphanedTasks.length}
+            </span>
+          </div>
+          <p className="text-[10px] text-text-tertiary px-4 py-1.5 border-b border-gray-100 dark:border-gray-800">
+            已移出周计划的任务，可重新移入
+          </p>
+          <div className="border-t border-gray-100 dark:border-gray-800">
+            {orphanedTasks.map((task) => (
+              <WeekTaskItem
+                key={task.id}
+                id={task.id}
+                title={task.title}
+                done={task.done}
+                priority={task.priority}
+                scheduledDate={task.scheduledDate}
+                weekDates={weekDates}
+                justDone={justDone === task.id}
+                onToggle={() => handleToggle(task.id, task.done)}
+                onDelete={() => handleDelete(task.id)}
+                onMove={() => setMoveTaskId(task.id)}
+                onEdit={(data) => {
+                  store.updateTask(task.id, data)
+                  showToast('任务已更新')
+                }}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* FAB: Add task */}
       <button
         onClick={() => setShowAddTask(true)}
-        className="fixed right-5 bottom-24 w-14 h-14 rounded-full bg-gradient-to-br from-primary to-primary-light text-white shadow-lg shadow-primary/30 flex items-center justify-center z-30 active:scale-95 transition-transform"
+        className="fixed right-5 w-14 h-14 rounded-full bg-gradient-to-br from-primary to-primary-light text-white shadow-lg shadow-primary/30 flex items-center justify-center z-30 active:scale-95 transition-transform"
+        style={{ bottom: 'calc(6rem + env(safe-area-inset-bottom, 0px))' }}
       >
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
           <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
@@ -387,7 +491,43 @@ export default function WeekPlanPage() {
         onClose={() => setMoveTaskId(null)}
         taskId={moveTaskId || ''}
         currentWeekPlanId={weekPlan?.id || null}
+        onMoved={showToast}
       />
+
+      {/* Edit week sheet */}
+      {showEditWeek && (
+        <div className="overlay" onClick={(e) => e.target === e.currentTarget && setShowEditWeek(false)}>
+          <div className="w-full max-w-lg bg-surface dark:bg-surface-dark rounded-t-3xl p-5 safe-bottom animate-slide-up">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold">编辑周计划</h3>
+              <button onClick={() => setShowEditWeek(false)} className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 dark:bg-gray-700 text-text-secondary">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                  <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+            <input value={editWeekTitle} onChange={(e) => setEditWeekTitle(e.target.value)} placeholder="本周主题（可选）" className="input mb-4" autoFocus />
+            <button onClick={handleSaveWeekEdit} className="btn-primary w-full !py-3">保存</button>
+            <div className="mt-4">
+              {showDeleteWeek ? (
+                <div className="card p-4 border-danger/20 animate-scale-in">
+                  <p className="text-sm text-danger mb-3 font-medium">确定要删除这个周计划吗？所有任务也会被删除。</p>
+                  <div className="flex gap-2">
+                    <button onClick={handleDeleteWeek} className="flex-1 bg-danger text-white rounded-xl py-2.5 text-sm font-medium">确认删除</button>
+                    <button onClick={() => setShowDeleteWeek(false)} className="flex-1 bg-gray-100 dark:bg-gray-800 rounded-xl py-2.5 text-sm font-medium">取消</button>
+                  </div>
+                </div>
+              ) : (
+                <button onClick={() => setShowDeleteWeek(true)} className="w-full text-danger/60 text-sm py-2 hover:text-danger transition-colors">
+                  删除这个周计划
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* fix: toast now handled by global MessageProvider */}
     </div>
   )
 }

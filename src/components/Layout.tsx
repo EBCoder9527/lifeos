@@ -1,12 +1,14 @@
-import { Outlet, useNavigate } from 'react-router'
+import { Outlet, useNavigate, useLocation } from 'react-router'
 import { TabBar } from './TabBar'
 import { QuickAdd } from './QuickAdd'
 import { useSettings } from '../stores/settings'
-import { useEffect } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 
 export function Layout() {
   const { theme } = useSettings()
   const navigate = useNavigate()
+  const { pathname } = useLocation()
+  const [showScrollTop, setShowScrollTop] = useState(false)
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark')
@@ -15,6 +17,25 @@ export function Layout() {
       meta.setAttribute('content', theme === 'dark' ? '#1a1a2e' : '#faf8f5')
     }
   }, [theme])
+
+  // 页面切换时自动回到顶部
+  useEffect(() => {
+    window.scrollTo(0, 0)
+  }, [pathname])
+
+  // Show scroll-to-top button after scrolling 1/3 viewport
+  useEffect(() => {
+    const threshold = window.innerHeight / 3
+    const handleScroll = () => {
+      setShowScrollTop(window.scrollY > threshold)
+    }
+    window.addEventListener('scroll', handleScroll, { passive: true })
+    return () => window.removeEventListener('scroll', handleScroll)
+  }, [])
+
+  const scrollToTop = useCallback(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }, [])
 
   return (
     <div className="min-h-screen bg-cream dark:bg-cream-dark text-text-primary dark:text-text-primary-dark">
@@ -45,6 +66,20 @@ export function Layout() {
 
       <TabBar />
       <QuickAdd />
+
+      {/* Scroll to top button */}
+      <button
+        onClick={scrollToTop}
+        className={`fixed right-5 z-30 w-10 h-10 rounded-full bg-surface dark:bg-surface-dark border border-gray-200 dark:border-gray-700 shadow-lg flex items-center justify-center transition-all duration-300 ${
+          showScrollTop ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'
+        }`}
+        style={{ bottom: 'calc(10rem + env(safe-area-inset-bottom, 0px))' }}
+        aria-label="回到顶部"
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+          <polyline points="18 15 12 9 6 15" />
+        </svg>
+      </button>
     </div>
   )
 }

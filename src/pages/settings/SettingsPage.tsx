@@ -17,7 +17,7 @@ export default function SettingsPage() {
 
   const handleClearAll = () => {
     localStorage.clear()
-    window.location.href = '/today'
+    window.location.reload()
   }
 
   const stats = [

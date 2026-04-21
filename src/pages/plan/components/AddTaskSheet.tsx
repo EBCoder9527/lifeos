@@ -1,5 +1,6 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import type { Priority } from '../../../types'
+import dayjs from 'dayjs'
 
 const priorities: { value: Priority; label: string; dot: string; color: string }[] = [
   { value: 'high', label: '高', dot: 'bg-danger', color: 'bg-danger/10 text-danger' },
@@ -12,17 +13,32 @@ const dayLabels = ['一', '二', '三', '四', '五', '六', '日']
 interface AddTaskSheetProps {
   open: boolean
   onClose: () => void
-  onSubmit: (data: { title: string; priority: Priority; scheduledDate?: string }) => void
+  onSubmit: (data: { title: string; priority: Priority; scheduledDates: string[] }) => void
   weekDates: string[] // 7 dates, Monday to Sunday
 }
 
 export function AddTaskSheet({ open, onClose, onSubmit, weekDates }: AddTaskSheetProps) {
   const [title, setTitle] = useState('')
   const [priority, setPriority] = useState<Priority>('medium')
-  const [selectedDay, setSelectedDay] = useState<number | null>(null)
+  const [selectedDays, setSelectedDays] = useState<number[]>([])
   const inputRef = useRef<HTMLInputElement>(null)
 
+  // Default select today when opening
+  useEffect(() => {
+    if (open) {
+      const todayStr = dayjs().format('YYYY-MM-DD')
+      const todayIdx = weekDates.indexOf(todayStr)
+      setSelectedDays(todayIdx >= 0 ? [todayIdx] : [])
+    }
+  }, [open, weekDates])
+
   if (!open) return null
+
+  const toggleDay = (i: number) => {
+    setSelectedDays((prev) =>
+      prev.includes(i) ? prev.filter((d) => d !== i) : [...prev, i]
+    )
+  }
 
   const handleSubmit = () => {
     const trimmed = title.trim()
@@ -30,7 +46,7 @@ export function AddTaskSheet({ open, onClose, onSubmit, weekDates }: AddTaskShee
     onSubmit({
       title: trimmed,
       priority,
-      scheduledDate: selectedDay !== null ? weekDates[selectedDay] : undefined,
+      scheduledDates: selectedDays.sort((a, b) => a - b).map((i) => weekDates[i]),
     })
     setTitle('')
     setPriority('medium')
@@ -85,14 +101,14 @@ export function AddTaskSheet({ open, onClose, onSubmit, weekDates }: AddTaskShee
 
         {/* Day picker */}
         <div className="mb-4">
-          <p className="text-xs text-text-secondary dark:text-text-secondary-dark font-medium mb-2">安排日期</p>
+          <p className="text-xs text-text-secondary dark:text-text-secondary-dark font-medium mb-2">安排日期（可多选）</p>
           <div className="flex gap-1.5">
             {dayLabels.map((label, i) => (
               <button
                 key={i}
-                onClick={() => setSelectedDay(selectedDay === i ? null : i)}
+                onClick={() => toggleDay(i)}
                 className={`flex-1 py-2 rounded-xl text-xs font-medium transition-all ${
-                  selectedDay === i
+                  selectedDays.includes(i)
                     ? 'bg-primary text-white shadow-md shadow-primary/20'
                     : 'bg-gray-50 dark:bg-gray-800 text-text-secondary dark:text-text-secondary-dark'
                 }`}

@@ -1,6 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router'
 import { useIdeaStore } from '../../stores/idea'
+import { RichTextEditor } from '../../components/RichTextEditor'
+import { RichTextViewer } from '../../components/RichTextViewer'
+import { useMessage } from '../../hooks/useMessage' // fix: unified showMessage
 import dayjs from 'dayjs'
 import type { IdeaCategory } from '../../types'
 
@@ -21,7 +24,7 @@ const categoryChipColor: Record<IdeaCategory, string> = {
 export default function IdeaEditPage() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { ideas, addIdea, updateIdea, deleteIdea } = useIdeaStore()
+  const { ideas, addIdea, updateIdea, deleteIdea, getAllTags } = useIdeaStore()
 
   const existing = id ? ideas.find((i) => i.id === id) : undefined
   const isNew = !id
@@ -33,6 +36,22 @@ export default function IdeaEditPage() {
   const [tags, setTags] = useState<string[]>(existing?.tags ?? [])
   const [tagInput, setTagInput] = useState('')
   const [showDelete, setShowDelete] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const { showMessage } = useMessage() // fix: unified showMessage
+  const [showSuggestions, setShowSuggestions] = useState(false)
+  const [selectedSuggestion, setSelectedSuggestion] = useState(-1)
+  const tagInputRef = useRef<HTMLInputElement>(null)
+  const suggestionsRef = useRef<HTMLDivElement>(null)
+
+  const allTags = useMemo(() => getAllTags(), [ideas])
+  const filteredSuggestions = useMemo(() => {
+    if (!tagInput.trim()) return allTags.filter((t) => !tags.some((et) => et.toLowerCase() === t.toLowerCase()))
+    const q = tagInput.trim().toLowerCase()
+    return allTags.filter((t) => t.toLowerCase().includes(q) && !tags.some((et) => et.toLowerCase() === t.toLowerCase()))
+  }, [tagInput, allTags, tags])
+
+  // fix: delegate to unified showMessage
+  const showToast = (msg: string) => showMessage('success', msg)
 
   useEffect(() => {
     if (id && !existing) navigate('/idea', { replace: true })
@@ -47,6 +66,16 @@ export default function IdeaEditPage() {
       setTags((prev) => [...new Set([...prev, ...newTags])])
       setTagInput('')
     }
+    setShowSuggestions(false)
+    setSelectedSuggestion(-1)
+  }
+
+  const selectSuggestion = (tag: string) => {
+    setTags((prev) => [...new Set([...prev, tag])])
+    setTagInput('')
+    setShowSuggestions(false)
+    setSelectedSuggestion(-1)
+    tagInputRef.current?.focus()
   }
 
   const removeTag = (tag: string) => {
@@ -54,16 +83,25 @@ export default function IdeaEditPage() {
   }
 
   const handleSave = () => {
+    if (saving) return
     const trimmedTitle = title.trim()
-    const trimmedContent = content.trim()
+    const trimmedContent = content.replace(/<[^>]*>/g, '').trim()
     if (!trimmedTitle && !trimmedContent) return
     const finalTitle = trimmedTitle || trimmedContent.slice(0, 20)
-    if (existing) {
-      updateIdea(existing.id, { title: finalTitle, content: trimmedContent, category, tags })
-      setIsEditing(false)
-    } else {
-      addIdea(finalTitle, trimmedContent, category, tags)
-      navigate('/idea')
+    setSaving(true)
+    try {
+      if (existing) {
+        updateIdea(existing.id, { title: finalTitle, content, category, tags })
+        setIsEditing(false)
+        showToast('保存成功')
+      } else {
+        addIdea(finalTitle, content, category, tags)
+        navigate('/idea')
+      }
+    } catch {
+      showMessage('error', '保存失败，请重试') // fix: error type for failures
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -126,9 +164,7 @@ export default function IdeaEditPage() {
 
         {/* Content */}
         <div className="card p-5 mb-5">
-          <div className="diary-content whitespace-pre-wrap">
-            {existing.content}
-          </div>
+          <RichTextViewer content={existing.content} className="diary-content" />
         </div>
 
         {/* Tags */}
@@ -197,10 +233,10 @@ export default function IdeaEditPage() {
         <h2 className="text-base font-bold">{existing ? '编辑灵感' : '记录灵感'}</h2>
         <button
           onClick={handleSave}
-          disabled={!title.trim() && !content.trim()}
+          disabled={saving || (!title.trim() && !content.replace(/<[^>]*>/g, '').trim())}
           className="btn-primary !px-5 !py-2 text-sm"
         >
-          保存
+          {saving ? '保存中...' : '保存'}
         </button>
       </div>
 
@@ -238,7 +274,7 @@ export default function IdeaEditPage() {
       </div>
 
       {/* Tags */}
-      <div className="mb-4">
+      <div className="mb-4 relative">
         <label className="text-xs text-text-secondary dark:text-text-secondary-dark font-medium mb-1.5 block">标签</label>
         {tags.length > 0 && (
           <div className="flex gap-1.5 flex-wrap mb-2">
@@ -254,30 +290,78 @@ export default function IdeaEditPage() {
           </div>
         )}
         <input
+          ref={tagInputRef}
           value={tagInput}
-          onChange={(e) => setTagInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ',') {
-              e.preventDefault()
+          onChange={(e) => {
+            setTagInput(e.target.value)
+            setShowSuggestions(true)
+            setSelectedSuggestion(-1)
+          }}
+          onFocus={() => setShowSuggestions(true)}
+          onBlur={() => {
+            // Delay to allow suggestion click
+            setTimeout(() => {
               addTagFromInput()
+              setShowSuggestions(false)
+            }, 150)
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'ArrowDown') {
+              e.preventDefault()
+              setSelectedSuggestion((prev) => Math.min(prev + 1, filteredSuggestions.length - 1))
+            } else if (e.key === 'ArrowUp') {
+              e.preventDefault()
+              setSelectedSuggestion((prev) => Math.max(prev - 1, -1))
+            } else if (e.key === 'Enter' || e.key === ',') {
+              e.preventDefault()
+              if (selectedSuggestion >= 0 && filteredSuggestions[selectedSuggestion]) {
+                selectSuggestion(filteredSuggestions[selectedSuggestion])
+              } else {
+                addTagFromInput()
+              }
+            } else if (e.key === 'Escape') {
+              setShowSuggestions(false)
             }
           }}
-          onBlur={addTagFromInput}
           placeholder="输入标签，回车添加"
           className="input"
         />
+        {/* Tag suggestions dropdown */}
+        {showSuggestions && filteredSuggestions.length > 0 && (
+          <div
+            ref={suggestionsRef}
+            className="absolute left-0 right-0 mt-1 bg-surface dark:bg-surface-dark border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg overflow-hidden z-20 max-h-40 overflow-y-auto"
+          >
+            {filteredSuggestions.slice(0, 8).map((tag, i) => (
+              <button
+                key={tag}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => selectSuggestion(tag)}
+                className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
+                  i === selectedSuggestion
+                    ? 'bg-primary-soft text-primary font-medium'
+                    : 'text-text-primary dark:text-text-primary-dark hover:bg-gray-50 dark:hover:bg-gray-800'
+                }`}
+              >
+                #{tag}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Content */}
       <div className="flex-1 mb-4">
         <label className="text-xs text-text-secondary dark:text-text-secondary-dark font-medium mb-1.5 block">内容</label>
-        <textarea
+        <RichTextEditor
           value={content}
-          onChange={(e) => setContent(e.target.value)}
+          onChange={setContent}
           placeholder="记录你的想法..."
-          className="input resize-none min-h-[220px] h-full text-[15px] leading-loose"
+          className="input !p-0 overflow-hidden min-h-[220px]"
         />
       </div>
+
+      {/* fix: toast now handled by global MessageProvider */}
     </div>
   )
 }

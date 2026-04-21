@@ -5,6 +5,7 @@ import { useHabitStore } from '../../stores/habit'
 import { usePlanStore } from '../../stores/plan'
 import { useIdeaStore } from '../../stores/idea'
 import { ProgressRing } from '../../components/ProgressRing'
+import { stripHtml } from '../../utils/html'
 
 const moodEmoji: Record<string, string> = {
   happy: '😊', calm: '😌', sad: '😢', angry: '😤', tired: '😴',
@@ -77,7 +78,7 @@ export default function TodayPage() {
                 <span className="text-3xl animate-float">{moodEmoji[todayDiary.mood]}</span>
                 <div>
                   <p className="text-sm font-medium">已记录</p>
-                  <p className="text-xs text-text-tertiary line-clamp-1 max-w-[180px]">{todayDiary.content}</p>
+                  <p className="text-xs text-text-tertiary line-clamp-1 max-w-[180px]">{stripHtml(todayDiary.content)}</p>
                 </div>
               </div>
             ) : (
@@ -178,9 +179,9 @@ export default function TodayPage() {
             <span className="text-xs text-primary font-medium">{ideas.length} 条</span>
           </div>
           <p className="text-sm line-clamp-2 text-text-secondary dark:text-text-secondary-dark">
-            {ideas[0].content}
+            {stripHtml(ideas[0].content)}
           </p>
-          {ideas[0].tags.length > 0 && (
+          {(ideas[0].tags?.length ?? 0) > 0 && (
             <div className="flex gap-1.5 mt-2">
               {ideas[0].tags.slice(0, 3).map((tag) => (
                 <span key={tag} className="chip bg-primary-soft text-primary">#{tag}</span>
