@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
 import { useHabitStore } from '../../stores/habit'
+import { useMessage } from '../../hooks/useMessage' // fix: unified showMessage
 import type { HabitFrequency } from '../../types'
 
 const iconCategories = [
@@ -18,6 +19,8 @@ type FreqMode = 'daily' | 'workdays' | 'custom'
 export default function HabitManagePage() {
   const navigate = useNavigate()
   const { habits, addHabit, archiveHabit } = useHabitStore()
+  const { showMessage } = useMessage() // fix: unified showMessage
+  const showToast = (msg: string) => showMessage('success', msg) // fix: delegate
   const [name, setName] = useState('')
   const [icon, setIcon] = useState('📖')
   const [customIconInput, setCustomIconInput] = useState('')
@@ -39,6 +42,7 @@ export default function HabitManagePage() {
     if (!trimmed) return
     if (freqMode === 'custom' && customDays.length === 0) return
     addHabit(trimmed, icon, buildFrequency())
+    showToast('习惯添加成功') // fix: add habit toast
     setName('')
     setIcon('📖')
     setCustomIconInput('')
@@ -217,7 +221,7 @@ export default function HabitManagePage() {
                 {showArchiveId === habit.id ? (
                   <div className="flex gap-2 animate-scale-in">
                     <button
-                      onClick={() => { archiveHabit(habit.id); setShowArchiveId(null) }}
+                      onClick={() => { archiveHabit(habit.id); setShowArchiveId(null); showToast('习惯已删除') }}
                       className="text-xs bg-danger text-white px-3 py-1.5 rounded-full font-medium"
                     >
                       确认

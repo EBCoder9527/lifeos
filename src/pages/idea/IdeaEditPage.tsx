@@ -96,6 +96,7 @@ export default function IdeaEditPage() {
         showToast('保存成功')
       } else {
         addIdea(finalTitle, content, category, tags)
+        showToast('灵感添加成功') // fix: add idea toast
         navigate('/idea')
       }
     } catch {
@@ -121,6 +122,7 @@ export default function IdeaEditPage() {
   const handleDelete = () => {
     if (existing) {
       deleteIdea(existing.id)
+      showToast('灵感已删除') // fix: delete idea toast
       navigate('/idea')
     }
   }

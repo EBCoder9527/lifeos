@@ -21,11 +21,10 @@ interface WeekTaskItemProps {
   justDone: boolean
   onToggle: () => void
   onDelete: () => void
-  onMove?: () => void
   onEdit?: (data: { title: string; priority: Priority; scheduledDate?: string }) => void // fix: include scheduledDate
 }
 
-export function WeekTaskItem({ title, done, priority, scheduledDate, weekDates, justDone, onToggle, onDelete, onMove, onEdit }: WeekTaskItemProps) {
+export function WeekTaskItem({ title, done, priority, scheduledDate, weekDates, justDone, onToggle, onDelete, onEdit }: WeekTaskItemProps) {
   const cfg = priorityConfig[priority]
   const [editing, setEditing] = useState(false)
   const [editTitle, setEditTitle] = useState(title)
@@ -142,17 +141,6 @@ export function WeekTaskItem({ title, done, priority, scheduledDate, weekDates, 
         {title}
       </span>
       <div className={`w-1.5 h-1.5 rounded-full ${cfg.dot} shrink-0`} title={cfg.label} />
-      {onMove && (
-        <button
-          onClick={onMove}
-          className="text-text-tertiary hover:text-primary transition-colors p-0.5 shrink-0"
-          title="移动"
-        >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M5 9l4-4 4 4" /><path d="M9 5v14" /><path d="M15 19l4-4-4-4" /><path d="M19 15H5" />
-          </svg>
-        </button>
-      )}
       <button
         onClick={onDelete}
         className="text-text-tertiary hover:text-danger transition-colors p-0.5 shrink-0"

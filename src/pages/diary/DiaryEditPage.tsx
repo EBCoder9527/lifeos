@@ -78,6 +78,7 @@ export default function DiaryEditPage() {
       showToast('日记已保存')
     } else {
       addDiary({ date, content, mood, tags })
+      showToast('日记添加成功') // fix: add diary toast
       navigate('/diary')
     }
   }
@@ -99,6 +100,7 @@ export default function DiaryEditPage() {
   const handleDelete = () => {
     if (existing) {
       deleteDiary(existing.id)
+      showToast('日记已删除') // fix: delete diary toast
       navigate('/diary')
     }
   }

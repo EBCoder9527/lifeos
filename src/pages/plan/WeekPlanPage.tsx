@@ -5,7 +5,6 @@ import { ProgressRing } from '../../components/ProgressRing'
 import { WeekTaskItem } from './components/WeekTaskItem'
 import { AddTaskSheet } from './components/AddTaskSheet'
 import { PlanBreadcrumb } from './components/PlanBreadcrumb'
-import { TaskMoveSheet } from '../../components/TaskMoveSheet'
 import { useMessage } from '../../hooks/useMessage' // fix: unified showMessage
 import dayjs from 'dayjs'
 import isoWeek from 'dayjs/plugin/isoWeek'
@@ -31,8 +30,8 @@ export default function WeekPlanPage() {
   const [showAddTask, setShowAddTask] = useState(false)
   const [justDone, setJustDone] = useState<string | null>(null)
   const [showReflection, setShowReflection] = useState(false)
-  const [deleteId, setDeleteId] = useState<string | null>(null)
-  const [moveTaskId, setMoveTaskId] = useState<string | null>(null)
+  const [deleteId, setDeleteId] = useState<string | null>(null) // fix: confirmation dialog
+  const [collapsedDays, setCollapsedDays] = useState<Set<string>>(new Set()) // fix: collapsible day cards
   const [showEditWeek, setShowEditWeek] = useState(false)
   const [showDeleteWeek, setShowDeleteWeek] = useState(false)
   const [editWeekTitle, setEditWeekTitle] = useState('')
@@ -44,10 +43,25 @@ export default function WeekPlanPage() {
   const currentMonday = getMondayOfWeek(today)
 
   // Find or derive the week plan
-  const weekPlan = useMemo(() => {
-    if (id) return store.weekPlans.find((w) => w.id === id)
-    return store.weekPlans.find((w) => w.startDate === currentMonday.format('YYYY-MM-DD'))
+  // fix: support multiple week plans for the same date (goal-layer vs standalone)
+  const allWeekPlansForDate = useMemo(() => {
+    if (id) {
+      // When viewing a specific plan by ID, also find others for the same date
+      const target = store.weekPlans.find((w) => w.id === id)
+      if (!target) return []
+      return store.weekPlans.filter((w) => w.startDate === target.startDate)
+    }
+    const mondayStr = currentMonday.format('YYYY-MM-DD')
+    return store.weekPlans.filter((w) => w.startDate === mondayStr)
   }, [id, store.weekPlans, currentMonday])
+
+  const weekPlan = useMemo(() => {
+    if (id) return allWeekPlansForDate.find((w) => w.id === id)
+    // Default: prefer standalone (monthPlanId === null) plan
+    return allWeekPlansForDate.find((w) => !w.monthPlanId) ?? allWeekPlansForDate[0]
+  }, [id, allWeekPlansForDate])
+
+  const isGoalWeekPlan = weekPlan?.monthPlanId != null // fix: distinguish goal-layer
 
   const displayMonday = weekPlan ? dayjs(weekPlan.startDate) : currentMonday
   const displaySunday = displayMonday.add(6, 'day')
@@ -88,11 +102,6 @@ export default function WeekPlanPage() {
     return { yearGoal: yg, quarterGoal: qg, monthPlan: mp, weekPlan }
   }, [weekPlan, store.monthPlans, store.quarterGoals, store.yearGoals])
 
-  // fix: orphaned tasks — weekPlanId null OR explicitly marked independent
-  const orphanedTasks = useMemo(() => {
-    return store.tasks.filter((t) => t.weekPlanId === null || t.isIndependent)
-  }, [store.tasks])
-
   // Week navigation
   const navigateWeek = useCallback((offset: number) => {
     const target = displayMonday.add(offset * 7, 'day')
@@ -117,15 +126,27 @@ export default function WeekPlanPage() {
     }
   }
 
+  // fix: delete with confirmation dialog
   const handleDelete = (taskId: string) => {
-    if (deleteId === taskId) {
-      store.deleteTask(taskId)
-      setDeleteId(null)
+    setDeleteId(taskId)
+  }
+
+  const confirmDelete = () => {
+    if (deleteId) {
+      store.deleteTask(deleteId)
       showToast('任务已删除')
-    } else {
-      setDeleteId(taskId)
-      setTimeout(() => setDeleteId(null), 3000)
+      setDeleteId(null)
     }
+  }
+
+  // fix: toggle day card collapse
+  const toggleDayCollapse = (date: string) => {
+    setCollapsedDays((prev) => {
+      const next = new Set(prev)
+      if (next.has(date)) next.delete(date)
+      else next.add(date)
+      return next
+    })
   }
 
   // fix: replaced local showToast with unified showMessage
@@ -236,8 +257,43 @@ export default function WeekPlanPage() {
         </div>
       )}
 
+      {/* fix: Week plan switcher — show when multiple plans exist for the same date */}
+      {allWeekPlansForDate.length > 1 && (
+        <div className="flex gap-2 mb-4">
+          {allWeekPlansForDate.map((wp) => {
+            const isGoal = wp.monthPlanId != null
+            const isActive = wp.id === weekPlan?.id
+            return (
+              <button
+                key={wp.id}
+                onClick={() => navigate(`/plan/week/${wp.id}`)}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-medium border-2 transition-all ${
+                  isActive
+                    ? isGoal
+                      ? 'bg-secondary-soft text-secondary border-secondary/30'
+                      : 'bg-primary-soft text-primary border-primary/30'
+                    : 'border-transparent bg-gray-50 dark:bg-gray-800 text-text-secondary'
+                }`}
+              >
+                <span>{isGoal ? '🎯' : '📋'}</span>
+                {isGoal ? '目标计划' : '日常计划'}
+              </button>
+            )
+          })}
+        </div>
+      )}
+
+      {/* fix: Goal-layer visual badge */}
+      {isGoalWeekPlan && (
+        <div className="flex items-center gap-2 mb-3 px-1">
+          <span className="text-[10px] px-2 py-0.5 rounded-full bg-secondary-soft text-secondary font-medium">
+            🎯 目标层计划
+          </span>
+        </div>
+      )}
+
       {/* Progress Hero Card */}
-      <div className="card p-5 mb-5">
+      <div className={`card p-5 mb-5 ${isGoalWeekPlan ? '!border-secondary/20 ring-1 ring-secondary/10' : ''}`}>
         <div className="flex items-center gap-5">
           <ProgressRing size={72} strokeWidth={6} progress={progress} color="var(--color-primary)">
             <div className="text-center">
@@ -274,6 +330,7 @@ export default function WeekPlanPage() {
             const isToday = date === todayStr
             const isPast = dayjs(date).isBefore(today, 'day')
             const allDone = tasks.length > 0 && tasks.every((t) => t.done)
+            const isCollapsed = collapsedDays.has(date) // fix: collapsible
 
             return (
               <div
@@ -286,11 +343,21 @@ export default function WeekPlanPage() {
                       : ''
                 }`}
               >
-                {/* Day header */}
-                <div className={`flex items-center justify-between px-4 py-2.5 ${
-                  isToday ? 'bg-primary-soft/50' : ''
-                }`}>
+                {/* fix: Day header — clickable to toggle collapse */}
+                <button
+                  onClick={() => toggleDayCollapse(date)}
+                  className={`w-full flex items-center justify-between px-4 py-2.5 ${
+                    isToday ? 'bg-primary-soft/50' : ''
+                  }`}
+                >
                   <div className="flex items-center gap-2">
+                    <svg
+                      width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                      strokeLinecap="round"
+                      className={`text-text-tertiary transition-transform ${isCollapsed ? '' : 'rotate-90'}`}
+                    >
+                      <polyline points="9 6 15 12 9 18" />
+                    </svg>
                     <span className={`text-sm font-bold ${isToday ? 'text-primary' : ''}`}>
                       {dayNames[i]}
                     </span>
@@ -312,41 +379,42 @@ export default function WeekPlanPage() {
                       {tasks.filter((t) => t.done).length}/{tasks.length}
                     </span>
                   )}
-                </div>
+                </button>
 
-                {/* Tasks */}
-                {tasks.length > 0 ? (
-                  <div className="border-t border-gray-100 dark:border-gray-800">
-                    {tasks
-                      .sort((a, b) => {
-                        const po = { high: 0, medium: 1, low: 2 }
-                        if (a.done !== b.done) return a.done ? 1 : -1
-                        return po[a.priority] - po[b.priority]
-                      })
-                      .map((task) => (
-                        <WeekTaskItem
-                          key={task.id}
-                          id={task.id}
-                          title={task.title}
-                          done={task.done}
-                          priority={task.priority}
-                          scheduledDate={task.scheduledDate}
-                          weekDates={weekDates}
-                          justDone={justDone === task.id}
-                          onToggle={() => handleToggle(task.id, task.done)}
-                          onDelete={() => handleDelete(task.id)}
-                          onMove={() => setMoveTaskId(task.id)}
-                          onEdit={(data) => {
-                            store.updateTask(task.id, data)
-                            showToast('任务已更新')
-                          }}
-                        />
-                      ))}
-                  </div>
-                ) : (
-                  <div className="px-4 py-2 border-t border-gray-100 dark:border-gray-800">
-                    <p className="text-xs text-text-tertiary">暂无任务</p>
-                  </div>
+                {/* fix: Tasks — hide when collapsed */}
+                {!isCollapsed && (
+                  tasks.length > 0 ? (
+                    <div className="border-t border-gray-100 dark:border-gray-800">
+                      {tasks
+                        .sort((a, b) => {
+                          const po = { high: 0, medium: 1, low: 2 }
+                          if (a.done !== b.done) return a.done ? 1 : -1
+                          return po[a.priority] - po[b.priority]
+                        })
+                        .map((task) => (
+                          <WeekTaskItem
+                            key={task.id}
+                            id={task.id}
+                            title={task.title}
+                            done={task.done}
+                            priority={task.priority}
+                            scheduledDate={task.scheduledDate}
+                            weekDates={weekDates}
+                            justDone={justDone === task.id}
+                            onToggle={() => handleToggle(task.id, task.done)}
+                            onDelete={() => handleDelete(task.id)}
+                            onEdit={(data) => {
+                              store.updateTask(task.id, data)
+                              showToast('任务已更新')
+                            }}
+                          />
+                        ))}
+                    </div>
+                  ) : (
+                    <div className="px-4 py-2 border-t border-gray-100 dark:border-gray-800">
+                      <p className="text-xs text-text-tertiary">暂无任务</p>
+                    </div>
+                  )
                 )}
               </div>
             )
@@ -374,7 +442,6 @@ export default function WeekPlanPage() {
                     justDone={justDone === task.id}
                     onToggle={() => handleToggle(task.id, task.done)}
                     onDelete={() => handleDelete(task.id)}
-                    onMove={() => setMoveTaskId(task.id)}
                     onEdit={(data) => {
                       store.updateTask(task.id, data)
                       showToast('任务已更新')
@@ -427,45 +494,6 @@ export default function WeekPlanPage() {
         </div>
       )}
 
-      {/* Orphaned/independent tasks */}
-      {orphanedTasks.length > 0 && (
-        <div className="card overflow-hidden mb-5">
-          <div className="flex items-center justify-between px-4 py-2.5 bg-warning-soft/30">
-            <div className="flex items-center gap-2">
-              <span className="text-sm">📦</span>
-              <span className="text-sm font-bold text-text-secondary dark:text-text-secondary-dark">独立任务</span>
-            </div>
-            <span className="text-[10px] px-2 py-0.5 rounded-full bg-warning/10 text-warning font-medium">
-              {orphanedTasks.length}
-            </span>
-          </div>
-          <p className="text-[10px] text-text-tertiary px-4 py-1.5 border-b border-gray-100 dark:border-gray-800">
-            已移出周计划的任务，可重新移入
-          </p>
-          <div className="border-t border-gray-100 dark:border-gray-800">
-            {orphanedTasks.map((task) => (
-              <WeekTaskItem
-                key={task.id}
-                id={task.id}
-                title={task.title}
-                done={task.done}
-                priority={task.priority}
-                scheduledDate={task.scheduledDate}
-                weekDates={weekDates}
-                justDone={justDone === task.id}
-                onToggle={() => handleToggle(task.id, task.done)}
-                onDelete={() => handleDelete(task.id)}
-                onMove={() => setMoveTaskId(task.id)}
-                onEdit={(data) => {
-                  store.updateTask(task.id, data)
-                  showToast('任务已更新')
-                }}
-              />
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* FAB: Add task */}
       <button
         onClick={() => setShowAddTask(true)}
@@ -483,15 +511,6 @@ export default function WeekPlanPage() {
         onClose={() => setShowAddTask(false)}
         onSubmit={handleAddTask}
         weekDates={weekDates}
-      />
-
-      {/* Task move sheet */}
-      <TaskMoveSheet
-        open={!!moveTaskId}
-        onClose={() => setMoveTaskId(null)}
-        taskId={moveTaskId || ''}
-        currentWeekPlanId={weekPlan?.id || null}
-        onMoved={showToast}
       />
 
       {/* Edit week sheet */}
@@ -522,6 +541,23 @@ export default function WeekPlanPage() {
                   删除这个周计划
                 </button>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* fix: delete task confirmation dialog */}
+      {deleteId && (
+        <div className="overlay" onClick={(e) => e.target === e.currentTarget && setDeleteId(null)}>
+          <div className="w-full max-w-sm bg-surface dark:bg-surface-dark rounded-t-3xl p-5 safe-bottom animate-slide-up">
+            <p className="text-sm text-danger mb-4 font-medium text-center">确定要删除这个任务吗？</p>
+            <div className="flex gap-3">
+              <button onClick={() => setDeleteId(null)} className="flex-1 bg-gray-100 dark:bg-gray-800 rounded-xl py-2.5 text-sm font-medium">
+                取消
+              </button>
+              <button onClick={confirmDelete} className="flex-1 bg-danger text-white rounded-xl py-2.5 text-sm font-medium">
+                确认删除
+              </button>
             </div>
           </div>
         </div>
